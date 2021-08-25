@@ -1,0 +1,173 @@
+---
+title: "CyboRg 2021-08 (August)"
+output: 
+  word_document: 
+    fig_width: 5
+    fig_height: 5
+---
+```{r read some data used in the next code chunk, paged.print=FALSE}
+sv18 <- 
+  read.csv("C:/Users/00028958/LocalData/R Projects/ENVT4461/sv2018_original.csv",
+           stringsAsFactors=TRUE)
+limits <- read.csv("limits.csv", stringsAsFactors = TRUE)
+row.names(limits) <- c("As","Ba","Be","Cd","Cr","Cu","Mn","Ni","Pb","V","Zn")
+print(limits)
+```
+
+# CyboRg 10 August 2021
+
+## Function of the week - *which()*
+
+An updated version of the code I showed in Cyborg20210810. I think I might have used the previous version to also show the t() (transpose) function.
+
+```{r function of the week which(), paged.print=FALSE}
+out <- 
+  as.data.frame(cbind(as.numeric(as.character(sv18$Core[which(sv18$Cu > limits["Cu","EIL"])])),
+      sv18$Cu[which(sv18$Cu > limits["Cu","EIL"])],
+      sv18$Depth_upper[which(sv18$Cu > limits["Cu","EIL"])],
+      sv18$Depth_lower[which(sv18$Cu > limits["Cu","EIL"])]))
+colnames(out) <- c("Core","Cu (mg/kg)","DepthHi","DepthLo")
+cat("Cores and depths in which Cu concentration > EIL\n");print(out)
+out <- 
+  as.data.frame(cbind(as.numeric(as.character(sv18$Core[which(sv18$Pb > limits["Pb","EIL"])])),
+      sv18$Pb[which(sv18$Pb > limits["Pb","EIL"])],
+      sv18$Depth_upper[which(sv18$Pb > limits["Pb","EIL"])],
+      sv18$Depth_lower[which(sv18$Pb > limits["Pb","EIL"])]))
+colnames(out) <- c("Core","Pb (mg/kg)","DepthHi","DepthLo")
+cat("\nCores and depths in which Pb concentration > EIL\n");print(out) # \n represents a line break
+out <- 
+  as.data.frame(cbind(as.numeric(as.character(sv18$Core[which(sv18$Zn > limits["Zn","EIL"])])),
+      sv18$Zn[which(sv18$Zn > limits["Zn","EIL"])],
+      sv18$Depth_upper[which(sv18$Zn > limits["Zn","EIL"])],
+      sv18$Depth_lower[which(sv18$Zn > limits["Zn","EIL"])]))
+colnames(out) <- c("Core","Zn (mg/kg)","DepthHi","DepthLo")
+cat("\nCores and depths in which Zn concentration > EIL\n");print(out) # \n represents a line break
+rm(out) # remove temporary object(s)
+```
+
+# CyboRg 10 August 2021
+
+## Function of the week - *(grep)*
+```{r use grep to combine different names for the same thing}
+# read the data #####
+# downloaded from
+# https://github.com/rfordatascience/tidytuesday/blob/master/data/2021/2021-08-17/computer.csv
+computer <- read.csv("C:/Users/00028958/LocalData/R Projects/CyboRg/computer.csv")
+
+# create a new empty column *new_char* full of NA values
+computer$new_char <- rep(NA,nrow(computer))
+
+# Combining different names for (probably) the same character ####
+# find the row numbers where the character (column computer$char) 
+# contains "Computer", put results into object x
+x <- grep("Computer",computer$char)
+# replace NA with "Computer" in the column new_char rows
+computer$new_char[x] <- rep("Computer", length(x))
+computer[x,c("char","new_char")] # show the results
+```
+
+# and something we talked about but didn't show
+
+```{r Number of times a character says computer}
+# lots of nested functions here!
+# maybe we should also learn how to use pipes?
+y <- as.data.frame(summary(as.factor(computer$char[grep("computer",computer$line)])))
+colnames(y) <- "n"
+y$Character <- row.names(y)
+par(mar = c(7,4,1,1),mgp=c(1.5,0.2,0), las=2, cex.axis = 1, cex.lab = 1, 
+        font.lab = 2, tcl=0.2)
+barplot(y$n, names.arg = y$Character, cex.names = 0.8, 
+        ylab="Number of times a\ncharacter says 'computer'",
+        ylim = c(0,max(y$n)*1.05), col = "steelblue")
+box()
+```
+
+# Week 3 of CyboRg - previews
+
+## Flexible code
+```{r How to identify just the numeric columns, paged.print=FALSE}
+cat(rep("-",10),"All the column names",rep("-",10),"\n");names(computer)
+num_cols <- as.logical(sapply(computer, is.numeric)) # Identify numeric columns
+computer_num <- computer[,num_cols]
+cat(rep("-",10),"Just the names of numeric columns",rep("-",10),"\n");names(computer_num)
+cat(rep("-",20),"\n");head(computer_num)
+cat(rep("-",20),"\n");cat("The dataset has",ncol(computer_num),"numeric columns\n")
+```
+
+```{r paged.print=FALSE}
+# script authored by andrew rate (C) the university of western australia 2016-2021
+# ratey.at.uwa@gmail.com
+#
+# this version creates new log- and power-transformed variables
+# and tests all [un]transformed variables for normality
+#
+# load required packages
+require(car)
+# create temp object with names of variables to be transformed
+
+# define starting and ending columns
+c1 <- 10
+cn <- 40 # probably not needed in this version 
+subdata <- sv18[,c1:ncol(sv18)] # strip off first few columns (i.e. sample info)
+n_cols <- as.logical(sapply(subdata, is.numeric)) # Identify numeric columns
+numdata <- subdata[,n_cols]
+rm(list = c("subdata","temp"))
+rm(subdata)
+names.of.cols <- names(numdata)
+nvar <- length(names.of.cols)
+#
+# generate matrix of comma separated values
+# and calculate new variables
+#
+# make initial output data frame
+table <- data.frame("Variable"=rep(NA,nvar),
+                             "W_orig"=rep(NA,nvar),
+                             "p_orig"=rep(NA,nvar), "W_log_tr"=rep(NA,nvar),
+                             "p_log_tr"=rep(NA,nvar), "W_pow_tr"=rep(NA,nvar),
+                             "p_pow_tr"=rep(NA,nvar), "Pow_term"=rep(NA,nvar))
+# start loop that assesses variable distributions and creates new variables
+for (i in 1:nvar) {
+  pt1 <- powerTransform(numdata[, i])
+  sw0 <- shapiro.test(numdata[, i])
+  sw1 <- shapiro.test(log10(numdata[, i]))
+  sw2 <- shapiro.test((numdata[, i]) ^ as.vector(pt1$lambda))
+  table[i,] <- c(names.of.cols[i], signif(sw0$statistic, 4), 
+                                 signif(sw0$p.value, 4), signif(sw1$statistic, 4), 
+                                 signif(sw1$p.value, 4), signif(sw2$statistic, 4),
+                                 signif(sw2$p.value, 4), signif(as.vector(pt1$lambda), 4))
+}
+#
+# output caption and table
+# "\n" inserts a line break
+{cat("\nTable. Shapiro-Wilk statistics and p-values for untransformed (_orig) and transformed
+    (_log, _pow) variables from soil and sediment analysis at Ashfield Flats Reserve.\n\n")
+print(table, row.names = FALSE)}
+#
+# export results to a csv file for Excel (if desired)
+write.csv(table, file = "transformations.csv", row.names = FALSE)
+write.table(table, "clipboard", sep="\t", row.names = F)
+# remove temporary objects
+# to keep R workspace tidy
+
+temp <- read.table("clipboard", header=T, sep="\t")
+
+rm(list=c("names.of.cols","pt1","sw0","sw1","sw2","i","table"))
+# end code
+```
+
+```{r}
+  #numdata[paste0(names.of.cols[i],".log")]<-log10(numdata[i])
+  # if ... else applies factor of -1 to 
+  # power transforms with negative terms
+  # if (as.vector(pt1$lambda) > 0) {
+    #numdata[paste0(names.of.cols[i], ".pow")] <-
+    # numdata[i] ^ as.numeric(unlist(pt1$lambda))
+  # }
+  # else {
+  #   numdata[paste0(names.of.cols[i], ".pow")] <-
+  #     -1 * ((numdata[i]) ^ as.numeric(unlist(pt1$lambda)))
+  # }
+  # generate and print test statistics
+
+```
+

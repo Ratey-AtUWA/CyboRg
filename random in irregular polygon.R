@@ -29,7 +29,6 @@ for(i in 1:np * 10) {
   if (class(check[1, 1]) == "numeric") {
     inside[j,] <- data0[1,]
     j <- j + 1
-    print(j)
   }
   if (j > np) {
     break

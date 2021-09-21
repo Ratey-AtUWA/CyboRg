@@ -1,0 +1,77 @@
+---
+title: "CyboRg 2021-09 (September)"
+output: 
+  word_document: 
+    fig_width: 5
+    fig_height: 5
+---
+
+# CyboRg session 2021-09-21
+
+This is code to populate an irregular polygon with a selected number of randomized points. It represents part the first phase of development of an R package to generate different sampling designs given a site boundary and number or spacing of samples. In this case of randomized points, spacing is not really a relevant concept.
+
+## read data and set up basic boundary parameters
+```{r}
+irreg <- read.csv("sv_boundary.csv")
+str(irreg)
+# use floor, ceiling to get integer values
+extremes <- as.integer(c(min(floor(irreg$Easting)),
+              min(floor(irreg$Northing)),
+              max(ceiling(irreg$Easting)),
+              max(ceiling(irreg$Northing))))
+```
+
+## use boundary data to set up and generate random points
+```{r message=FALSE, warning=FALSE}
+# we need the geoR package for the locations.inside() function
+library(geoR)
+
+# make x and y vectors with 1m spacing to randomly select from
+xlist <- seq(extremes[1], extremes[3], 1)
+ylist <- seq(extremes[2], extremes[4], 1)
+
+# choose how many points within the irregular polygon...
+np <- 60
+#...and make an empty data frame to hold the results
+inside <- data.frame(E = rep(NA, np), N = rep(NA, np))
+
+# initiate a counting variable...
+j = 1
+
+# ...and use a while loop to check whether the random samples from
+# the x and y vectors are inside the polygon, adding them to the data 
+# frame if they are. Keep looping until the data frame is full.
+while(j <= np) {
+  data0 <- data.frame(E = sample(xlist, 1), N = sample(ylist, 1))
+  check <- locations.inside(locations = data0,
+                            borders = irreg[, c("Easting", "Northing")])
+  if (class(check[1, 1]) == "numeric") {
+    inside[j,] <- data0[1,]
+    j <- j + 1
+  }
+}
+str(inside)
+```
+
+## check how it looks with a plot
+
+We use the objects irreg, extremes, inside from the previous 2 chunks.
+
+```{r fig.height=5, fig.width=4}
+par(mfrow = c(1,1), mar = c(3,3,1,1), mgp = c(1.6, 0.3, 0), 
+    tcl = 0.25, font.lab = 2, lend=1, ljoin=2, cex.axis = 0.8)
+with(irreg, plot(Easting, Northing, asp = 1, type = "l", cex.lab = 1.1))
+rect(extremes[1], extremes[2], 
+     extremes[3], extremes[4], 
+     border = "tan", lty = 2)
+points(inside[,1:2], pch = 3, col = "red3")
+legend("bottomleft", bty = "o", inset = 0.06, cex = 0.9,
+       box.col = "grey", bg = "white", y.intersp = 1.2,
+       legend = c("Irregular polygon", "Max. extent", paste(np,"random points")),
+       pch = c(NA,NA,3), col = c(1, "tan", "red3"), lty = c(1,2,NA))
+```
+
+### tidy up
+```{r}
+rm(list = c("xlist", "ylist", "np", "inside", "j", "data0", "check"))
+```

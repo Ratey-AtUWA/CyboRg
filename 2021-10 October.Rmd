@@ -1,0 +1,155 @@
+---
+title: "CyboRg 2021-10 (October)"
+output: 
+  word_document: 
+    fig_width: 5
+    fig_height: 5
+---
+
+# CyboRg session 2021-10-05
+
+# 1. Regular grid inside irregular polygon, with user-defined spacing and offset
+
+This is code to populate an irregular polygon with a rectangular grid of points with user-selected spacing. It represents part of the first phase of development of an R package to generate different sampling designs given a site boundary and number or spacing of samples. The next code chunks (# 2.) also populate the irregular shape with a grid, but this time with user-selection of the number of samples.
+
+## set user-defined parameters
+```{r}
+boundfile <- "sv_boundary.csv"
+spacing <- 40 # spacing in metres for UTM data
+offset <- 25 # x,y offset in metres for UTM data
+```
+
+## read data and set up basic boundary parameters
+```{r}
+library(sp)
+irreg <- read.csv(boundfile)
+str(irreg)
+# make a spatial polygon (package 'sp') to calculate area
+irregpoly <- Polygon(cbind(irreg$Easting, irreg$Northing), hole=F)
+str(irregpoly)
+# use floor, ceiling to get integer values for boundary extremes
+extremes <- as.integer(c(min(floor(irreg$Easting)),
+              min(floor(irreg$Northing)),
+              max(ceiling(irreg$Easting)),
+              max(ceiling(irreg$Northing))))
+# two useful areas
+area <- irregpoly@area
+maxarea <- (extremes[3]-extremes[1]) * (extremes[4]-extremes[2])
+```
+
+## use boundary data to set up and generate square grid
+```{r message=FALSE, warning=FALSE}
+# we need the geoR package for the locations.inside() function
+library(geoR)
+grid_max <- expand.grid(seq(extremes[1], 
+                            extremes[3], by = spacing) + offset,
+                        seq(extremes[2], 
+                            extremes[4], by = spacing) + offset)
+inside <- locations.inside(locations = grid_max,
+                          borders = irreg[, c("Easting", "Northing")])
+str(inside)
+cat("\nOriginal grid has", NROW(grid_max),"points, with",NROW(inside),"of these inside sampling area.\n")
+```
+
+## check how it looks with a plot
+
+We use several objects from the previous 2 chunks.
+
+```{r fig.height=7, fig.width=5}
+par(mfrow = c(1,1), mar = c(3,3,1,1), mgp = c(1.6, 0.3, 0), 
+    tcl = 0.25, font.lab = 2, lend=1, ljoin=2, cex.axis = 0.8)
+with(irreg, plot(Easting, Northing, asp = 1, type = "l"))
+rect(extremes[1], extremes[2], 
+     extremes[3], extremes[4], 
+     border = "chocolate", lty = 2)
+points(inside, col = "purple", pch = 3, cex = 0.8)
+
+legend("bottomleft", inset = 0.05, y.intersp = 1.2, bty = "o", box.col = 8,
+       legend = c(paste0("Spacing = ",spacing,"m, offset = ", offset,"m"),
+                  paste("Irregular polygon",signif(area,5),"m\u00B2"), 
+                  paste("Max. extent",signif(maxarea,6),"m\u00B2")),
+       pch = c(3,NA,NA), col = c("purple",1, "chocolate"), lty = c(NA,1,2))
+mtext(paste("Polygon has",length(inside[,1]),"points from original grid of",length(grid_max[,1]),"points"),
+      3,-1)
+```
+
+## set user-defined parameters
+```{r}
+boundfile <- "sv_boundary.csv"
+n <- 75 # desired number of points in grid
+offset <- 5 # x,y offset in metres for UTM data
+```
+
+## read data and set up basic boundary parameters
+```{r}
+library(sp)
+irreg <- read.csv(boundfile)
+str(irreg)
+# make a spatial polygon (package 'sp') to calculate area
+irregpoly <- Polygon(cbind(irreg$Easting, irreg$Northing), hole=F)
+str(irregpoly)
+# use floor, ceiling to get integer values for boundary extremes
+extremes <- as.integer(c(min(floor(irreg$Easting)),
+              min(floor(irreg$Northing)),
+              max(ceiling(irreg$Easting)),
+              max(ceiling(irreg$Northing))))
+# two useful areas
+area <- irregpoly@area
+maxarea <- (extremes[3]-extremes[1]) * (extremes[4]-extremes[2])
+```
+
+## use number of points, area ratio, and aspect ratio to set up and generate square grid
+```{r message=FALSE, warning=FALSE}
+# we need the geoR package for the locations.inside() function
+library(geoR)
+yxratio <- diff(range(extremes[c(2,4)]))/diff(range(extremes[c(1,3)]))
+arearatio <- area/maxarea
+# next 2 lines from some algebra done outside the code
+# essentially we need to solve x*y*arearatio = n, where y/x = yxratio
+# first to calculate number of points per side...
+xside <- sqrt(n/(arearatio*yxratio))
+yside <- yxratio*sqrt(n/(arearatio*yxratio))
+# ...then use this and maxarea dimensions to calculate (rounded) spacing
+spacing <- round(mean(diff(range(extremes[c(1,3)]))/xside,
+              diff(range(extremes[c(2,4)]))/yside), 0)
+grid_max <- expand.grid(seq(extremes[1], 
+                            extremes[3], by = spacing) + offset,
+                        seq(extremes[2], 
+                            extremes[4], by = spacing) + offset)
+# then find just the locations inside the grid
+# which should be approx. arearatio * (points in grid_max)
+inside <- locations.inside(locations = grid_max,
+                          borders = irreg[, c("Easting", "Northing")])
+str(inside)
+cat("\nOriginal grid has", NROW(grid_max),"points, with",NROW(inside),"of these inside sampling area.\n",
+    "(Note that actual and desired number of points may differ due to rounding.)\n")
+```
+
+## check how it looks with a plot
+
+We use several objects from the previous 2 chunks.
+
+```{r fig.height=7, fig.width=5.5}
+par(mfrow = c(1,1), mar = c(3,3,1,1), mgp = c(1.6, 0.3, 0), 
+    tcl = 0.25, font.lab = 2, lend=1, ljoin=2, cex.axis = 0.8)
+with(irreg, plot(Easting, Northing, asp = 1, type = "l"))
+rect(extremes[1], extremes[2], 
+     extremes[3], extremes[4], 
+     border = "chocolate", lty = 2)
+points(inside, col = "darkorchid", pch = 10, cex = 1)
+
+legend("bottomleft", inset = 0.05, y.intersp = 1.2, bty = "o", box.col = 8,
+       legend = c(paste0("Calculated spacing = ",spacing,"m"), paste0("User-defined offset = ", offset,"m"),
+                  paste("Irregular polygon",signif(area,5),"m\u00B2"), 
+                  paste("Max. extent",signif(maxarea,6),"m\u00B2")),
+       pch = c(10,NA,NA,NA), col = c("darkorchid",NA,1, "chocolate"), lty = c(NA,NA,1,2))
+mtext(paste0("Polygon has ",NROW(inside)," points (target ",n,") from grid of ",NROW(grid_max)," points"),
+      3,-1)
+```
+
+### tidy up
+```{r}
+rm(list = c("boundfile","spacing","offset","n","irreg","irregpoly",
+            "extremes","area","maxarea","arearatio","yxratio",
+            "xside","yside","grid_max","inside"))
+```

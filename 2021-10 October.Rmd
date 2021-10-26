@@ -147,6 +147,204 @@ mtext(paste0("Polygon has ",NROW(inside)," points (target ",n,") from grid of ",
       3,-1)
 ```
 
+# 2. Making the code into a function
+
+Here's some information about the rectBySpacing function in R Help format:
+
+*Description*
+A function to populate irregular polygon with rectangular grid points at defined x (and optionally y) spacings
+
+*Usage*
+rectBySpacing(boundary, xspacing = 0, yspacing = xspacing, xoffset = 0,
+              yoffset = xoffset, proj4 = NULL)
+
+*Arguments*
+boundary    a matrix or data frame with the coordinates of the irregular polygon 
+            boundary in the first two columns (x in 1st, y in 2nd)
+
+xspacing    the spacing of the grid in the x-dimension (e.g. easting, longitude),
+            with the same units as the coordinates (defaults to zero)
+
+yspacing    spacing of the grid in the y-dimension (e.g. northing, latitude),
+            with the same units as the coordinates (default is xspacing value)        
+
+xoffset     the starting x-coordinate of the grid relative to the minimum x in 
+            the boundary coordinates and with the same units (defaults to zero)
+
+yoffset     the starting y-coordinate of the grid relative to the minimum y in 
+            the boundary coordinates and with the same units (defaults to zero)
+
+proj4       the proj4 string for the coordinate reference system (defaults to 
+            "+proj=longlat +ellps=WGS84 +datum=WGS84 +no_defs", i.e. EPSG:4326)
+
+*Value*
+An object of class "list" containing:
+
+points_in   a 2-column data frame containing the coordinates of the points 
+            inside the irregular polygon
+
+x_spacing   a single numeric value of the x-spacing specified in the function call
+
+y_spacing   a single numeric value of the y-spacing specified in the function call
+
+x_offset    a single numeric value of the x-offset specified in the function call
+
+y_offset    a single numeric value of the y-offset specified in the function call
+
+npoints     the number of points inside the irregular polygon (integer)
+
+max_points  the number of points in the grid constrained by a rectangle defined by 
+            the minima and maxima of the irregular polygon coordinates (integer)
+
+shape_area  a single numeric value of the area (in coordinate units squared) of 
+            the irregular polygon
+
+max_area    a single numeric value of the area (in coordinate units squared) of 
+            the rectangle defined by the minima and maxima of the irregular polygon
+
+extremes    a numeric vector containing min(x), min(y), max(x), max(y)
+
+proj_4_str  a character string of class "CRS" [package "sp"] which is the 
+            proj4 string for the coordinate reference system
+
+## note that the function code uses the over() function from the sp package, rather than the locations.inside() function from the geoR package (which is based on the sp::over function anyway)
+
+```{r}
+rectBySpacing <-
+  function(boundary,
+           xspacing = 0,
+           yspacing = xspacing,
+           xoffset = 0,
+           yoffset = xoffset,
+           proj4 = NULL
+  ) {
+    require(sp)
+    
+    # if projection not defined, set to EPSG:4326 (LongLat)
+    if (is.null(proj4)) {
+      p4 <-
+        CRS("+proj=longlat +ellps=WGS84 +datum=WGS84 +no_defs")
+    } else {
+      p4 <- CRS(proj4)
+    }
+    
+    # make boundary coords into SpatialPolygons object
+    irregpoly <- Polygon(boundary[, c(1,2)], hole = F)
+    irregPolys = Polygons(list(irregpoly),1)
+    irregSpatialPolys = SpatialPolygons(list(irregPolys), 
+                          proj4string = p4)
+    
+    # define limirs of initial (maximal) grid
+    extremes <- c(min(floor(boundary[, 1])),
+                  min(floor(boundary[, 2])),
+                  max(ceiling(boundary[, 1])),
+                  max(ceiling(boundary[, 2])))
+    # calculate areas
+    area <- irregpoly@area
+    maxarea <-
+      (extremes[3] - extremes[1]) * (extremes[4] - extremes[2])
+    
+    # make initial (maximal) grid
+    grid_big <- expand.grid(
+      seq(extremes[1],
+          extremes[3], by = xspacing) + xoffset,
+      seq(extremes[2],
+          extremes[4], by = yspacing) + yoffset
+    )
+    # convert initial grid to SpatialPoints object
+    gridSP <- SpatialPoints(grid_big, proj4string = p4)
+
+    # user over() function from sp package to mask initial grid
+    inOrOut <- as.vector(over(gridSP, irregSpatialPolys))
+    insideSP <- gridSP[which(inOrOut>0)]
+    # convert masked coordinates back into data frame
+    inside <- as.data.frame(insideSP@coords)
+    colnames(inside) <- c("x", "y")
+    
+    # make output object
+  output <-
+    list(
+      points_in = inside,
+      x_spacing = xspacing,
+      y_spacing = yspacing,
+      x_offset = xoffset,
+      y_offset = yoffset,
+      npoints = NROW(inside),
+      max_points = NROW(grid_big),
+      shape_area = area,
+      max_area = maxarea,
+      extremes = c(min(floor(boundary[, 1])),
+                    min(floor(boundary[, 2])),
+                    max(ceiling(boundary[, 1])),
+                    max(ceiling(boundary[, 2]))),
+      proj_4_str = p4
+    )
+  return(output)
+  }
+```
+
+## testing the rectBySpacing() function - create an output object and plot
+
+```{r fig.height=7, fig.width=6}
+SVbound <- read.csv("sv_boundary.csv")
+SVdesign <-
+  rectBySpacing(SVbound,
+                xspacing = 30,
+                yspacing = 40,
+                xoffset = 10,
+                yoffset = 15,
+                proj4 = "+proj=utm +zone=50 +south")
+# -+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-
+# check with a plot
+par(
+  mfrow = c(1, 1),
+  mar = c(3, 3, 1, 1),
+  mgp = c(1.6, 0.3, 0),
+  tcl = 0.25,
+  font.lab = 2,
+  lend = 2,
+  ljoin = 1,
+  cex.axis = 0.8
+)
+with(SVbound, plot(Easting, Northing, asp = 1, type = "l"))
+rect(SVdesign$extremes[1], SVdesign$extremes[2],
+     SVdesign$extremes[3], SVdesign$extremes[4],
+     border = "chocolate",
+     lty = 2)
+points(SVdesign$points_in,
+       col = "purple",
+       pch = 3,
+       cex = 0.8)
+
+legend(
+  "bottomleft",
+  inset = 0.04,
+  y.intersp = 1.2,
+  bty = "o",
+  box.col = 8,
+  title = expression(bold("Rectangular Grid Sampling Design")),
+  legend = c(
+    paste0("Spacing = ", SVdesign$x_spacing,"\u00D7",SVdesign$y_spacing), 
+    paste0("  offset = ", SVdesign$x_offset,"\u00D7",SVdesign$y_offset),
+    paste("Irregular polygon", signif(SVdesign$shape_area, 5), "m\u00B2"),
+    paste("Max. extent", signif(SVdesign$max_area, 6), "m\u00B2")
+  ),
+  cex = 0.9, pch = c(3, NA, NA, NA),
+  col = c("purple", NA, 1, "chocolate"),
+  lty = c(NA, NA, 1, 2)
+)
+mtext(paste(
+  "Polygon contains",
+  SVdesign$npoints,
+  "points from maximal grid of",
+  SVdesign$max_points, "points"), 
+  3, -1, col = "grey50", font = 3)
+mtext("Charles Veryard and Smith's Lake Reserves, North Perth", 
+  side = 3, line = 0.1, 
+  col = "#27348B", font = 2, 
+  cex = 0.9, family = "serif")
+```
+
 ### tidy up
 ```{r}
 rm(list = c("boundfile","spacing","offset","n","irreg","irregpoly",

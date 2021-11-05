@@ -1,4 +1,4 @@
-profiles <- read.csv("Deep_Cores.csv")
+profiles <- read.csv("Deep_Cores.csv") # data file in this repository
 
 profiles$Site <- as.factor(profiles$Site)
 

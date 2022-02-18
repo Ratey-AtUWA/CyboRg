@@ -1,5 +1,6 @@
-# function to convert kml files saved from Google Earth
-# to 
+# R function to convert kml files saved from Google Earth
+# to  data frame of utm and long-lat coordinates
+
 kmlconvert <- function(file = NULL, utmzone = 50, hemi = "south") {
   require(sp)
   require(maptools)
